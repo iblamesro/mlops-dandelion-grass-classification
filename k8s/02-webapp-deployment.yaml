@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+  namespace: mlops
+  labels:
+    app: webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: webapp
+        image: YOUR_DOCKERHUB_USERNAME/mlops-webapp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8501
+        envFrom:
+        - configMapRef:
+            name: mlops-config
+        - secretRef:
+            name: mlops-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: mlops
+spec:
+  type: LoadBalancer
+  selector:
+    app: webapp
+  ports:
+  - protocol: TCP
+    port: 8501
+    targetPort: 8501
