@@ -73,7 +73,11 @@ class Settings(BaseSettings):
 # Global settings instance
 settings = Settings()
 
-# Create necessary directories
-settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+# Create necessary directories (only if we have permissions)
+try:
+    settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    # In Airflow container, we don't need these local directories
+    pass

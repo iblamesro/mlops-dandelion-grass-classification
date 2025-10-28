@@ -13,7 +13,7 @@ import sys
 sys.path.append('/opt/airflow')
 
 from src.utils.helpers import download_image, validate_image, preprocess_image
-from src.utils.s3_client import minio_client
+from src.utils.s3_client import get_minio_client
 from src.config import settings
 from loguru import logger
 
@@ -57,6 +57,7 @@ def download_and_upload_images(**context):
         return
     
     pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+    minio = get_minio_client()  # Initialize MinIO client
     success_count = 0
     failed_count = 0
     
@@ -82,7 +83,7 @@ def download_and_upload_images(**context):
             
             # Upload to MinIO
             object_name = f"{label}/{record_id:08d}.jpg"
-            success = minio_client.upload_image(
+            success = minio.upload_image(
                 settings.S3_BUCKET_DATA,
                 object_name,
                 image

@@ -87,3 +87,8 @@ minio-data/
 *.db
 *.sqlite
 postgres-data/
+
+# Datasets (too large for git)
+data/dandelion/*.jpg
+data/grass/*.jpg
+models/downloaded/*.pth

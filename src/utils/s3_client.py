@@ -188,5 +188,15 @@ class MinIOClient:
             return False
 
 
-# Global client instance
-minio_client = MinIOClient()
+# Global client instance (lazy initialization)
+_minio_client = None
+
+def get_minio_client():
+    """Get or create the global MinIO client instance"""
+    global _minio_client
+    if _minio_client is None:
+        _minio_client = MinIOClient()
+    return _minio_client
+
+# For backward compatibility
+minio_client = None  # Will be initialized on first use

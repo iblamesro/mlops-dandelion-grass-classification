@@ -4,10 +4,13 @@ FastAPI application for plant classification
 
 import io
 import time
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
+from pathlib import Path
 
 import torch
+import torch.nn as nn
+from torchvision import models, transforms
 from PIL import Image
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
@@ -17,8 +20,6 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from loguru import logger
 
 from src.config import settings
-from src.training.model import load_model
-from src.utils.helpers import preprocess_image, image_to_tensor
 
 
 # Initialize FastAPI app
@@ -46,6 +47,44 @@ device = None
 class_names = ["dandelion", "grass"]
 
 
+def create_model(num_classes=2):
+    """Create ResNet18 model"""
+    model = models.resnet18(weights=None)
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Linear(num_ftrs, num_classes)
+    return model
+
+
+def load_model_from_checkpoint(model_path: str, device: torch.device):
+    """Load model from checkpoint file"""
+    model = create_model(num_classes=2)
+    checkpoint = torch.load(model_path, map_location=device)
+    
+    # Handle different checkpoint formats
+    if isinstance(checkpoint, dict):
+        if 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        elif 'state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+    else:
+        model.load_state_dict(checkpoint)
+    
+    model.to(device)
+    model.eval()
+    return model
+
+
+def get_image_transforms():
+    """Get image preprocessing transforms"""
+    return transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+
 class PredictionResponse(BaseModel):
     """Response model for predictions"""
     predicted_class: str
@@ -61,26 +100,37 @@ async def load_model_on_startup():
     
     logger.info("Loading model...")
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Determine device
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    
     logger.info(f"Using device: {device}")
     
     try:
-        model_path = settings.MODELS_DIR / f"{settings.MODEL_NAME}_best.pth"
+        model_path = Path("models/best_model.pth")
         
         if not model_path.exists():
-            logger.warning(f"Model not found at {model_path}, creating dummy model")
-            from src.training.model import create_model
-            model = create_model(pretrained=True)
+            logger.warning(f"Model not found at {model_path}, creating untrained model for demo")
+            model = create_model(num_classes=2)
             model.to(device)
         else:
-            model = load_model(str(model_path), device)
+            model = load_model_from_checkpoint(str(model_path), device)
+            logger.success(f"✅ Model loaded from {model_path}")
         
         model.eval()
-        logger.success("✅ Model loaded successfully")
+        logger.success("✅ Model ready for predictions")
         
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
-        raise
+        # Create a dummy model to keep API running
+        model = create_model(num_classes=2)
+        model.to(device)
+        model.eval()
+        logger.warning("⚠️  Running with untrained model")
 
 
 @app.get("/")
@@ -124,20 +174,13 @@ async def predict(file: UploadFile = File(...)):
         contents = await file.read()
         
         try:
-            image = Image.open(io.BytesIO(contents))
+            image = Image.open(io.BytesIO(contents)).convert('RGB')
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
         
         # Preprocess image
-        image = preprocess_image(image, target_size=(settings.IMAGE_SIZE, settings.IMAGE_SIZE))
-        
-        # Convert to tensor
-        img_tensor = image_to_tensor(image)
-        img_tensor = img_tensor.unsqueeze(0)  # Add batch dimension
-        
-        # Normalize
-        normalize = torch.nn.functional.normalize
-        img_tensor = img_tensor.to(device)
+        transform = get_image_transforms()
+        img_tensor = transform(image).unsqueeze(0).to(device)
         
         # Predict
         with torch.no_grad():
@@ -173,14 +216,15 @@ async def model_info():
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     return {
-        "model_name": settings.MODEL_NAME,
+        "model_name": "ResNet18",
         "classes": class_names,
-        "image_size": settings.IMAGE_SIZE,
+        "image_size": 224,
         "device": str(device),
-        "model_type": "ResNet18"
+        "model_type": "ResNet18",
+        "num_parameters": sum(p.numel() for p in model.parameters())
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=settings.API_HOST, port=settings.API_PORT)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

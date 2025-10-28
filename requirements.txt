@@ -23,7 +23,7 @@ gradio==4.4.0
 
 # Database
 psycopg2-binary==2.9.9
-sqlalchemy==2.0.23
+sqlalchemy==1.4.50
 alembic==1.12.1
 
 # Airflow
@@ -52,7 +52,7 @@ tqdm==4.66.1
 loguru==0.7.2
 
 # Feature Store
-feast==0.35.0
+# feast==0.35.0  # Temporairement désactivé - conflit avec Pydantic 2
 
 # Load Testing
 locust==2.17.0
