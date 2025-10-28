@@ -92,3 +92,24 @@ postgres-data/
 data/dandelion/*.jpg
 data/grass/*.jpg
 models/downloaded/*.pth
+
+# ========== OPTIMISATION ==========
+# Large model files (>100MB - GitHub limit)
+models/*.pth
+models/downloaded/*.pth
+
+# MLflow artifacts (reproductibles)
+mlruns/
+
+# Data images (téléchargeables via scripts)
+# data/dandelion/*.jpg
+# data/grass/*.jpg
+
+# Logs et cache
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+
+# Environment
+.env.local
